@@ -8,7 +8,7 @@ Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a
 2. Click **Create token** and copy the token.
 3. In RuneLite, open the settings of **Ironman Helper Sync** and paste the token into **Sync token**.
 4. Play as usual:
-   - **Bank:** open your bank in-game. A few seconds after the last change, the plugin sends it and shows a chat message such as `Ironman Helper: bank synced (412 items).` The bank can only be read while it is open.
+   - **Bank:** open your bank in-game. A few seconds after the last change, the plugin sends it. If anything changed since the last sync, it shows a chat message such as `Ironman Helper: bank synced (412 items).` The bank can only be read while it is open.
    - **Stats, quests, diaries, worn items and inventory:** sent about 10 seconds after you log in, then at most every 10 minutes when something changed, and together with each bank sync.
    - **Collection log:** open your collection log in-game and click **Search** once. The game then loads every item you have, and the plugin sends them. After that, new items are picked up from the chat message *New item added to your collection log* (turn on that game setting).
    - **Live XP:** your XP drops are bundled and sent at most every 5 seconds. Your player page shows that you are skilling, with an XP per hour estimate.
@@ -24,7 +24,7 @@ The plugin adds a small panel to the RuneLite sidebar with a **Sync now** button
 | Setting | Default | Description |
 |---|---|---|
 | Sync token | *(empty)* | Token from the Bank tab; nothing is sent while this is empty |
-| Chat messages | on | Show a chat message after each bank sync |
+| Chat messages | on | Show a chat message when your bank was synced with changes |
 
 ## Data sent to a third-party server
 

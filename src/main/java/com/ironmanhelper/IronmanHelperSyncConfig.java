@@ -28,7 +28,7 @@ public interface IronmanHelperSyncConfig extends Config
 	@ConfigItem(
 		keyName = "chatMessages",
 		name = "Chat messages",
-		description = "Show a chat message after each bank sync",
+		description = "Show a chat message when your bank was synced with changes",
 		position = 2
 	)
 	default boolean chatMessages()

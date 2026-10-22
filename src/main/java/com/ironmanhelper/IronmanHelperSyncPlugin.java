@@ -428,6 +428,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 					// Het aantal zoals de site het telt: bank fillers tellen niet mee en items met dezelfde naam
 					// (bv. graceful in andere kleuren) zijn één regel. Zo klopt de melding met de Bank-tab.
 					int count = snapshot.items.size();
+					boolean changed = true;
 					try
 					{
 						BankReply r = gson.fromJson(reply, BankReply.class);
@@ -435,13 +436,21 @@ public class IronmanHelperSyncPlugin extends Plugin
 						{
 							count = r.items;
 						}
+						if (r != null && r.changed != null)
+						{
+							changed = r.changed;
+						}
 					}
 					catch (RuntimeException e)
 					{
 						log.debug("Unexpected bank sync reply", e);
 					}
-					panel.setStatus(IronmanHelperSyncPanel.Kind.BANK, true, count + " items");
-					chat("Ironman Helper: bank synced (" + count + " items).");
+					// Chatmelding alleen als de bank echt anders is dan op de site (het paneel toont het altijd)
+					panel.setStatus(IronmanHelperSyncPanel.Kind.BANK, true, count + " items" + (changed ? "" : ", no changes"));
+					if (changed)
+					{
+						chat("Ironman Helper: bank synced (" + count + " items).");
+					}
 					// Het profiel gaat mee met de bank-sync
 					requestProfile(PROFILE_MIN_GAP_MS, false);
 					break;
@@ -760,6 +769,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private static class BankReply
 	{
 		int items;
+		/** Of de bank anders is dan de vorige keer op de server (null bij een oudere server: dan als veranderd) */
+		Boolean changed;
 	}
 
 	/** POST naar de server. */
