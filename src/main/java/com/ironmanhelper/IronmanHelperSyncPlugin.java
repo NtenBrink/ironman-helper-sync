@@ -570,12 +570,15 @@ public class IronmanHelperSyncPlugin extends Plugin
 		ItemContainer inv = client.getItemContainer(InventoryID.INV);
 		if (inv != null)
 		{
-			for (Item item : inv.getItems())
+			// Met het vakjesnummer (0–27), zodat de site de items op dezelfde plek toont als in-game
+			Item[] items = inv.getItems();
+			for (int i = 0; i < items.length; i++)
 			{
+				Item item = items[i];
 				if (item.getId() > 0 && item.getQuantity() > 0)
 				{
-					p.inventory.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), null));
-					sig.append(item.getId()).append(':').append(item.getQuantity()).append(',');
+					p.inventory.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), String.valueOf(i)));
+					sig.append(i).append('=').append(item.getId()).append(':').append(item.getQuantity()).append(',');
 				}
 			}
 		}

@@ -34,7 +34,7 @@ Every request includes your display name (it is part of the request URL) and you
 
 - **Bank:** the items in your bank (item id, item name and quantity) and the time of the sync.
 - **Stats, quests and diaries:** your XP per skill, the state of each quest (not started, in progress or finished) and which achievement diary tiers you have completed.
-- **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory: item id, item name and quantity.
+- **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory (with their inventory position): item id, item name and quantity.
 - **Collection log:** the item ids of collection log items you have, read when you open the log in-game, and the item name from the *New item added to your collection log* chat message.
 - **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
 
