@@ -38,7 +38,7 @@ Every request includes your display name (it is part of the request URL) and you
 - **Collection log:** the item ids of collection log items you have, read when you open the log in-game, and the item name from the *New item added to your collection log* chat message.
 - **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
 
-Nothing else is sent. That includes your location, account details, password, chat and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
+Nothing else is sent. That includes your location, account details, password, other chat messages and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
 
 The token only allows updating your own data on Ironman Helper. You can revoke it on the Bank tab at any time, after which the plugin can no longer sync.
 
