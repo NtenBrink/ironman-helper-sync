@@ -64,7 +64,7 @@ import okhttp3.Response;
  *   inloggen, daarna hooguit elke 10 minuten als er iets veranderd is, en mee met elke bank-sync;
  * - het collection log: als je het in-game opent en zoekt (script 4100 per verkregen item, net als WikiSync), en
  *   nieuwe items uit de chatmelding "New item added to your collection log";
- * - live XP-drops, gebundeld en hooguit elke 5 seconden.
+ * - live XP-drops, gebundeld en hooguit elke 2 seconden.
  * Met een sync-token wordt alles gesynct; het serveradres staat vast.
  */
 @Slf4j
@@ -87,7 +87,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private static final long PROFILE_INTERVAL_MS = 10 * 60_000;
 	private static final long PROFILE_MIN_GAP_MS = 11_000;
 	private static final long PROFILE_AFTER_LOGIN_MS = 10_000;
-	private static final long LIVE_FLUSH_SECONDS = 5;
+	private static final long LIVE_FLUSH_SECONDS = 2;
 	/** Script dat per verkregen collection log-item afgaat als het log zijn items laadt; argument 1 is het item-id */
 	private static final int CLOG_ITEM_SCRIPT = 4100;
 	private static final String CLOG_CHAT_PREFIX = "New item added to your collection log:";

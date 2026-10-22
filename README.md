@@ -11,7 +11,7 @@ Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a
    - **Bank:** open your bank in-game. A few seconds after the last change, the plugin sends it. If anything changed since the last sync, it shows a chat message such as `Ironman Helper: bank synced (412 items).` The bank can only be read while it is open.
    - **Stats, quests, diaries, worn items and inventory:** sent about 10 seconds after you log in, then at most every 10 minutes when something changed, and together with each bank sync.
    - **Collection log:** open your collection log in-game and click **Search** once. The game then loads every item you have, and the plugin sends them. After that, new items are picked up from the chat message *New item added to your collection log* (turn on that game setting).
-   - **Live XP:** your XP drops are bundled and sent at most every 5 seconds. Your player page shows that you are skilling, with an XP per hour estimate.
+   - **Live XP:** your XP drops are bundled and sent at most every 2 seconds. Your player page shows that you are skilling, with an XP per hour estimate.
 
 The plugin skips uploads when nothing has changed.
 
