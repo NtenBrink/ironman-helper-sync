@@ -1,39 +1,49 @@
 # Ironman Helper Sync
 
-Keeps your bank up to date on [Ironman Helper](https://ironman-helper.com), a comparison site for a small group of OSRS ironman friends. You no longer need to export and paste your bank by hand.
+Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a comparison site for a small group of OSRS ironman friends: your bank, your stats, quests and achievement diaries, what you are wearing and carrying, and your XP drops live.
 
 ## How it works
 
 1. Log in on Ironman Helper, open your player page and go to the **Bank** tab.
 2. Click **Create token** and copy the token.
 3. In RuneLite, open the settings of **Ironman Helper Sync** and paste the token into **Sync token**.
-4. Open your bank in-game. A few seconds after the last change, the plugin sends your bank and shows a chat message such as `Ironman Helper: bank synced (412 items).`
+4. Play as usual:
+   - **Bank:** open your bank in-game. A few seconds after the last change, the plugin sends it and shows a chat message such as `Ironman Helper: bank synced (412 items).` The bank can only be read while it is open.
+   - **Stats, quests, diaries, worn items and inventory:** sent about 10 seconds after you log in, then at most every 10 minutes when something changed, and together with each bank sync.
+   - **Live XP:** your XP drops are bundled and sent at most every 5 seconds. Your player page shows that you are skilling, with an XP per hour estimate.
 
-The bank can only be read while it is open, so the plugin syncs when you visit a bank. It skips the upload when nothing has changed.
+The plugin skips uploads when nothing has changed.
+
+## Side panel
+
+The plugin adds a small panel to the RuneLite sidebar with a **Sync now** button. It sends your stats and items right away, and your bank if you opened it this session. The panel shows when each type of data was last synced and whether that worked.
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| Server URL | `https://ironman-helper.com` | Address of the Ironman Helper app |
 | Sync token | *(empty)* | Token from the Bank tab; nothing is sent while this is empty |
-| Sync automatically | on | Send the bank a few seconds after it changes |
-| Chat messages | on | Show a chat message after each sync |
+| Chat messages | on | Show a chat message after each bank sync |
+| **What to share** | | |
+| Bank | on | Send the bank a few seconds after it changes |
+| Stats, quests and diaries | on | Send XP per skill, quest progress and achievement diaries |
+| Worn items and inventory | on | Send what you are wearing and carrying |
+| Live XP | on | Send your XP drops live (bundled, at most every 5 seconds) |
 
 ## Data sent to a third-party server
 
-This plugin sends data to the server in the **Server URL** setting (by default `ironman-helper.com`, which is not run by Jagex or RuneLite). It only sends data when a sync token is set, and only after your bank changes.
+This plugin sends data to `ironman-helper.com`, which is not run by Jagex or RuneLite. The address is fixed and cannot be changed. The plugin only sends data when a sync token is set, and each type of data below can be turned off separately in the settings.
 
-Each sync sends:
+Every request includes your display name (it is part of the request URL) and your sync token, as the `Authorization` header. Depending on your settings, the plugin sends:
 
-- your display name (it is part of the request URL);
-- the items in your bank: item id, item name and quantity;
-- the time of the sync;
-- your sync token, as the `Authorization` header.
+- **Bank:** the items in your bank (item id, item name and quantity) and the time of the sync.
+- **Stats, quests and diaries:** your XP per skill, the state of each quest (not started, in progress or finished) and which achievement diary tiers you have completed.
+- **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory: item id, item name and quantity.
+- **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
 
-Nothing else is sent. That includes your inventory, equipment, location, account details, password and RuneLite settings. The plugin skips placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with a separate bank.
+Nothing else is sent. That includes your location, account details, password, chat and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
 
-The token only allows updating your own bank on Ironman Helper. You can revoke it on the Bank tab at any time, after which the plugin can no longer sync.
+The token only allows updating your own data on Ironman Helper. You can revoke it on the Bank tab at any time, after which the plugin can no longer sync.
 
 ## Development
 
