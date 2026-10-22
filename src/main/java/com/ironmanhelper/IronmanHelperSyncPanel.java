@@ -41,7 +41,7 @@ class IronmanHelperSyncPanel extends PluginPanel
 		title.setAlignmentX(Component.LEFT_ALIGNMENT);
 		content.add(title);
 
-		JLabel hint = new JLabel("<html>Syncs to ironman-helper.com. Choose what to share in the plugin settings.</html>");
+		JLabel hint = new JLabel("<html>Syncs to ironman-helper.com. To sync your collection log, open it in-game and click Search.</html>");
 		hint.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		hint.setBorder(BorderFactory.createEmptyBorder(4, 0, 10, 0));
 		hint.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -56,7 +56,7 @@ class IronmanHelperSyncPanel extends PluginPanel
 		rows.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
 		rows.setAlignmentX(Component.LEFT_ALIGNMENT);
 		rows.add(row("Bank", bankStatus));
-		rows.add(row("Stats & items", profileStatus));
+		rows.add(row("Stats, items & collection log", profileStatus));
 		rows.add(row("Live XP", liveStatus));
 		content.add(rows);
 

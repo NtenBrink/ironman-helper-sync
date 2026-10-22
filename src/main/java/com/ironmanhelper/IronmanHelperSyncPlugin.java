@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import javax.inject.Inject;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +30,11 @@ import net.runelite.api.Quest;
 import net.runelite.api.QuestState;
 import net.runelite.api.Skill;
 import net.runelite.api.WorldType;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarbitID;
@@ -46,6 +47,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.Text;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.HttpUrl;
@@ -60,8 +62,10 @@ import okhttp3.Response;
  * - de bank, een paar seconden nadat hij verandert (alleen leesbaar als hij in-game open is);
  * - het profiel: XP per skill, quests, achievement diaries, wat je draagt en je inventory. Ongeveer 10 s na het
  *   inloggen, daarna hooguit elke 10 minuten als er iets veranderd is, en mee met elke bank-sync;
+ * - het collection log: als je het in-game opent en zoekt (script 4100 per verkregen item, net als WikiSync), en
+ *   nieuwe items uit de chatmelding "New item added to your collection log";
  * - live XP-drops, gebundeld en hooguit elke 5 seconden.
- * Elk onderdeel is apart uit te zetten in de instellingen. Het serveradres staat vast.
+ * Met een sync-token wordt alles gesynct; het serveradres staat vast.
  */
 @Slf4j
 @PluginDescriptor(
@@ -84,6 +88,9 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private static final long PROFILE_MIN_GAP_MS = 11_000;
 	private static final long PROFILE_AFTER_LOGIN_MS = 10_000;
 	private static final long LIVE_FLUSH_SECONDS = 5;
+	/** Script dat per verkregen collection log-item afgaat als het log zijn items laadt; argument 1 is het item-id */
+	private static final int CLOG_ITEM_SCRIPT = 4100;
+	private static final String CLOG_CHAT_PREFIX = "New item added to your collection log:";
 	/** Werelden met een aparte bank en stats (leagues, deadman, beta enz.) niet syncen */
 	private static final Set<WorldType> SKIP_WORLDS = EnumSet.of(
 		WorldType.SEASONAL, WorldType.DEADMAN, WorldType.BETA_WORLD, WorldType.NOSAVE_MODE,
@@ -175,6 +182,13 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private final Map<String, LiveDrop> pendingDrops = new ConcurrentHashMap<>();
 	private volatile boolean xpBaselineNeeded = true;
 
+	// --- Collection log ---
+	/** Item-ids uit het geopende log, nog niet verstuurd */
+	private final Set<Integer> clogIds = ConcurrentHashMap.newKeySet();
+	/** Itemnamen uit de chatmelding, nog niet verstuurd */
+	private final Set<String> clogNames = ConcurrentHashMap.newKeySet();
+	private int clogLastTick = -1;
+
 	// --- Speler en wereld (bijgewerkt op de client-thread) ---
 	private volatile String playerName;
 	private volatile boolean skipWorld;
@@ -220,6 +234,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 		Map<String, Map<String, Boolean>> diaries;
 		List<CarriedItem> equipment;
 		List<CarriedItem> inventory;
+		List<Integer> collectionLog;
+		List<String> collectionLogNew;
 		String capturedAt;
 		transient String player;
 		transient String signature;
@@ -319,6 +335,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 			}
 			xpBaselineNeeded = false;
 		}
+		flushCollectionLog();
 	}
 
 	// ---------------------------------------------------------------- Bank
@@ -326,7 +343,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getContainerId() != InventoryID.BANK || !config.syncBank() || config.syncToken().isBlank() || skipWorld)
+		if (event.getContainerId() != InventoryID.BANK || config.syncToken().isBlank() || skipWorld)
 		{
 			return;
 		}
@@ -402,14 +419,29 @@ public class IronmanHelperSyncPlugin extends Plugin
 
 		String body = gson.toJson(new SyncBody(snapshot.items, Instant.now().toString()));
 		lastSentAt = System.currentTimeMillis();
-		post(new String[]{"api", "bank", snapshot.player, "sync"}, body, (code, retryAfter) ->
+		post(new String[]{"api", "bank", snapshot.player, "sync"}, body, (code, retryAfter, reply) ->
 		{
 			switch (code)
 			{
 				case 200:
 					lastSentSignature = snapshot.signature;
-					panel.setStatus(IronmanHelperSyncPanel.Kind.BANK, true, snapshot.items.size() + " items");
-					chat("Ironman Helper: bank synced (" + snapshot.items.size() + " items).");
+					// Het aantal zoals de site het telt: bank fillers tellen niet mee en items met dezelfde naam
+					// (bv. graceful in andere kleuren) zijn één regel. Zo klopt de melding met de Bank-tab.
+					int count = snapshot.items.size();
+					try
+					{
+						BankReply r = gson.fromJson(reply, BankReply.class);
+						if (r != null && r.items > 0)
+						{
+							count = r.items;
+						}
+					}
+					catch (RuntimeException e)
+					{
+						log.debug("Unexpected bank sync reply", e);
+					}
+					panel.setStatus(IronmanHelperSyncPanel.Kind.BANK, true, count + " items");
+					chat("Ironman Helper: bank synced (" + count + " items).");
 					// Het profiel gaat mee met de bank-sync
 					requestProfile(PROFILE_MIN_GAP_MS, false);
 					break;
@@ -445,7 +477,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		panel.setSyncing(true);
 		executor.schedule(() -> panel.setSyncing(false), 3, TimeUnit.SECONDS);
 		requestProfile(0, true);
-		if (config.syncBank() && lastBank != null)
+		if (lastBank != null)
 		{
 			executor.execute(() -> sendBank(true));
 		}
@@ -457,7 +489,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 	 */
 	private void requestProfile(long minGapMs, boolean force)
 	{
-		if (config.syncToken().isBlank() || (!config.syncStats() && !config.syncCarried()))
+		if (config.syncToken().isBlank())
 		{
 			return;
 		}
@@ -477,68 +509,78 @@ public class IronmanHelperSyncPlugin extends Plugin
 		Profile p = new Profile();
 		p.player = playerName;
 		StringBuilder sig = new StringBuilder();
-		if (config.syncStats())
+
+		// XP, quests en diaries
+		p.skills = new LinkedHashMap<>();
+		for (Skill skill : Skill.values())
 		{
-			p.skills = new LinkedHashMap<>();
-			for (Skill skill : Skill.values())
+			if (!"Overall".equals(skill.getName()))
 			{
-				if (!"Overall".equals(skill.getName()))
-				{
-					int xp = client.getSkillExperience(skill);
-					p.skills.put(skill.getName(), xp);
-					sig.append(xp).append(',');
-				}
-			}
-			p.quests = new LinkedHashMap<>();
-			for (Quest quest : Quest.values())
-			{
-				QuestState state = quest.getState(client);
-				int v = state == QuestState.FINISHED ? 2 : state == QuestState.IN_PROGRESS ? 1 : 0;
-				p.quests.put(quest.getName(), v);
-				sig.append(v);
-			}
-			p.diaries = new LinkedHashMap<>();
-			for (Map.Entry<String, int[]> e : DIARIES.entrySet())
-			{
-				Map<String, Boolean> tiers = new LinkedHashMap<>();
-				for (int i = 0; i < TIERS.length; i++)
-				{
-					boolean done = client.getVarbitValue(e.getValue()[i]) > 0;
-					tiers.put(TIERS[i], done);
-					sig.append(done ? '1' : '0');
-				}
-				p.diaries.put(e.getKey(), tiers);
+				int xp = client.getSkillExperience(skill);
+				p.skills.put(skill.getName(), xp);
+				sig.append(xp).append(',');
 			}
 		}
-		if (config.syncCarried())
+		p.quests = new LinkedHashMap<>();
+		for (Quest quest : Quest.values())
 		{
-			p.equipment = new ArrayList<>();
-			ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-			if (worn != null)
+			QuestState state = quest.getState(client);
+			int v = state == QuestState.FINISHED ? 2 : state == QuestState.IN_PROGRESS ? 1 : 0;
+			p.quests.put(quest.getName(), v);
+			sig.append(v);
+		}
+		p.diaries = new LinkedHashMap<>();
+		for (Map.Entry<String, int[]> e : DIARIES.entrySet())
+		{
+			Map<String, Boolean> tiers = new LinkedHashMap<>();
+			for (int i = 0; i < TIERS.length; i++)
 			{
-				for (Map.Entry<EquipmentInventorySlot, String> e : SLOT_NAMES.entrySet())
+				boolean done = client.getVarbitValue(e.getValue()[i]) > 0;
+				tiers.put(TIERS[i], done);
+				sig.append(done ? '1' : '0');
+			}
+			p.diaries.put(e.getKey(), tiers);
+		}
+
+		// Wat je draagt en bij je hebt
+		p.equipment = new ArrayList<>();
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		if (worn != null)
+		{
+			for (Map.Entry<EquipmentInventorySlot, String> e : SLOT_NAMES.entrySet())
+			{
+				Item item = worn.getItem(e.getKey().getSlotIdx());
+				if (item != null && item.getId() > 0 && item.getQuantity() > 0)
 				{
-					Item item = worn.getItem(e.getKey().getSlotIdx());
-					if (item != null && item.getId() > 0 && item.getQuantity() > 0)
-					{
-						p.equipment.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), e.getValue()));
-						sig.append(e.getValue()).append(item.getId()).append(':').append(item.getQuantity()).append(',');
-					}
+					p.equipment.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), e.getValue()));
+					sig.append(e.getValue()).append(item.getId()).append(':').append(item.getQuantity()).append(',');
 				}
 			}
-			p.inventory = new ArrayList<>();
-			ItemContainer inv = client.getItemContainer(InventoryID.INV);
-			if (inv != null)
+		}
+		p.inventory = new ArrayList<>();
+		ItemContainer inv = client.getItemContainer(InventoryID.INV);
+		if (inv != null)
+		{
+			for (Item item : inv.getItems())
 			{
-				for (Item item : inv.getItems())
+				if (item.getId() > 0 && item.getQuantity() > 0)
 				{
-					if (item.getId() > 0 && item.getQuantity() > 0)
-					{
-						p.inventory.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), null));
-						sig.append(item.getId()).append(':').append(item.getQuantity()).append(',');
-					}
+					p.inventory.add(new CarriedItem(item.getId(), itemManager.getItemComposition(item.getId()).getName(), item.getQuantity(), null));
+					sig.append(item.getId()).append(':').append(item.getQuantity()).append(',');
 				}
 			}
+		}
+
+		// Collection log: alleen wat sinds de vorige verzending binnenkwam (de server telt het op)
+		if (!clogIds.isEmpty())
+		{
+			p.collectionLog = new ArrayList<>(clogIds);
+			sig.append("clog").append(clogIds.size());
+		}
+		if (!clogNames.isEmpty())
+		{
+			p.collectionLogNew = new ArrayList<>(clogNames);
+			sig.append("clognew").append(clogNames.size());
 		}
 		p.signature = sig.toString();
 		return p;
@@ -564,12 +606,21 @@ public class IronmanHelperSyncPlugin extends Plugin
 		}
 		profile.capturedAt = Instant.now().toString();
 		lastProfileAt = now;
-		post(new String[]{"api", "player", profile.player, "sync"}, gson.toJson(profile), (code, retryAfter) ->
+		post(new String[]{"api", "player", profile.player, "sync"}, gson.toJson(profile), (code, retryAfter, reply) ->
 		{
 			if (code == 200)
 			{
 				lastProfileSignature = profile.signature;
-				panel.setStatus(IronmanHelperSyncPanel.Kind.PROFILE, true, "synced");
+				// Verstuurde collection log-items niet nog eens sturen
+				if (profile.collectionLog != null)
+				{
+					clogIds.removeAll(profile.collectionLog);
+				}
+				if (profile.collectionLogNew != null)
+				{
+					clogNames.removeAll(profile.collectionLogNew);
+				}
+				panel.setStatus(IronmanHelperSyncPanel.Kind.PROFILE, true, profile.collectionLog != null ? "synced, incl. collection log" : "synced");
 			}
 			else if (code == 429)
 			{
@@ -580,6 +631,58 @@ public class IronmanHelperSyncPlugin extends Plugin
 				panel.setStatus(IronmanHelperSyncPanel.Kind.PROFILE, false, code == 401 ? "token not valid" : code == -1 ? "server not reachable" : "status " + code);
 			}
 		});
+	}
+
+	// ---------------------------------------------------------------- Collection log
+
+	/**
+	 * Als het collection log zijn items laadt (vooral bij "Search" in het log), gaat dit script af voor elk item dat
+	 * je hebt; argument 1 is het item-id. Zelfde methode als de WikiSync-plugin.
+	 */
+	@Subscribe
+	public void onScriptPreFired(ScriptPreFired event)
+	{
+		if (event.getScriptId() != CLOG_ITEM_SCRIPT || event.getScriptEvent() == null || skipWorld)
+		{
+			return;
+		}
+		Object[] args = event.getScriptEvent().getArguments();
+		if (args != null && args.length > 1 && args[1] instanceof Integer && (Integer) args[1] > 0)
+		{
+			clogIds.add((Integer) args[1]);
+			clogLastTick = client.getTickCount();
+		}
+	}
+
+	/** "New item added to your collection log: Baby mole" (melding moet in-game aan staan). */
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		if (event.getType() != ChatMessageType.GAMEMESSAGE || skipWorld)
+		{
+			return;
+		}
+		String message = Text.removeTags(event.getMessage());
+		if (!message.startsWith(CLOG_CHAT_PREFIX))
+		{
+			return;
+		}
+		String name = message.substring(CLOG_CHAT_PREFIX.length()).trim();
+		if (!name.isEmpty())
+		{
+			clogNames.add(name);
+			requestProfile(0, true);
+		}
+	}
+
+	/** Twee ticks na het laatste item is het log klaar met laden: dan meteen versturen. */
+	private void flushCollectionLog()
+	{
+		if (clogLastTick != -1 && client.getTickCount() >= clogLastTick + 2)
+		{
+			clogLastTick = -1;
+			requestProfile(0, true);
+		}
 	}
 
 	// ---------------------------------------------------------------- Live XP
@@ -594,7 +697,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		}
 		int xp = event.getXp();
 		Integer before = lastXp.put(skill, xp);
-		if (before == null || xp <= before || !config.liveXp() || skipWorld)
+		if (before == null || xp <= before || skipWorld)
 		{
 			return;
 		}
@@ -606,7 +709,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private void flushLive()
 	{
 		String player = playerName;
-		if (pendingDrops.isEmpty() || player == null || config.syncToken().isBlank() || !config.liveXp())
+		if (pendingDrops.isEmpty() || player == null || config.syncToken().isBlank())
 		{
 			return;
 		}
@@ -623,7 +726,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		{
 			return;
 		}
-		post(new String[]{"api", "player", player, "live"}, gson.toJson(new LiveBody(drops, Instant.now().toString())), (code, retryAfter) ->
+		post(new String[]{"api", "player", player, "live"}, gson.toJson(new LiveBody(drops, Instant.now().toString())), (code, retryAfter, reply) ->
 		{
 			if (code == 200)
 			{
@@ -647,8 +750,20 @@ public class IronmanHelperSyncPlugin extends Plugin
 
 	// ---------------------------------------------------------------- HTTP
 
-	/** POST naar de server; `done` krijgt de statuscode (-1 = niet bereikbaar) en de Retry-After in seconden. */
-	private void post(String[] segments, String json, BiConsumer<Integer, Long> done)
+	/** Antwoord van de server: statuscode (-1 = niet bereikbaar), Retry-After in seconden en de body. */
+	private interface Reply
+	{
+		void accept(int code, long retryAfter, String body);
+	}
+
+	/** Antwoord op een bank-sync: hoeveel verschillende items de site telt (bank fillers eruit, gelijke namen samen). */
+	private static class BankReply
+	{
+		int items;
+	}
+
+	/** POST naar de server. */
+	private void post(String[] segments, String json, Reply done)
 	{
 		HttpUrl base = HttpUrl.parse(SERVER_URL);
 		if (base == null)
@@ -671,7 +786,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 			public void onFailure(Call call, IOException e)
 			{
 				log.debug("Ironman Helper sync failed", e);
-				done.accept(-1, 0L);
+				done.accept(-1, 0L, "");
 			}
 
 			@Override
@@ -681,7 +796,12 @@ public class IronmanHelperSyncPlugin extends Plugin
 				{
 					String retry = response.header("Retry-After");
 					long seconds = retry != null && retry.matches("\\d+") ? Long.parseLong(retry) : 30;
-					done.accept(response.code(), seconds);
+					String text = response.body() != null ? response.body().string() : "";
+					done.accept(response.code(), seconds, text);
+				}
+				catch (IOException e)
+				{
+					done.accept(response.code(), 30, "");
 				}
 			}
 		});
