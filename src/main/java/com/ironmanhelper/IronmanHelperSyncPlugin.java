@@ -298,8 +298,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
-		// Plugin uit: van de kaart af
-		locationOffline();
+		// Plugin uit: helemaal van de kaart af
+		locationOffline(true);
 		clientToolbar.removeNavigation(navButton);
 		cancelPending();
 		if (profileTicker != null)
@@ -333,8 +333,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 		}
 		else if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
 		{
-			// Uitgelogd of van wereld gewisseld: van de kaart af (na het wisselen volgt de nieuwe positie)
-			locationOffline();
+			// Uitgelogd of van wereld gewisseld: gedimd op de laatste plek (na het wisselen volgt de nieuwe positie)
+			locationOffline(false);
 			pendingDrops.clear();
 			playerName = null;
 		}
@@ -374,10 +374,10 @@ public class IronmanHelperSyncPlugin extends Plugin
 	{
 		if (!config.shareLocation() || skipWorld || config.syncToken().isBlank())
 		{
-			// Net uitgezet: meteen van de kaart af
+			// Net uitgezet: meteen helemaal van de kaart af
 			if (locationShared)
 			{
-				locationOffline();
+				locationOffline(true);
 			}
 			return;
 		}
@@ -411,8 +411,11 @@ public class IronmanHelperSyncPlugin extends Plugin
 		});
 	}
 
-	/** Van de kaart af (uitloggen, wereld wisselen of "Share location" uit). */
-	private void locationOffline()
+	/**
+	 * Offline melden. Uitloggen of wereld wisselen (remove = false): de site toont je gedimd op je laatste plek.
+	 * "Share location" of de plugin uit (remove = true): ook de bewaarde positie wordt gewist.
+	 */
+	private void locationOffline(boolean remove)
 	{
 		String player = playerName;
 		if (!locationShared || player == null || config.syncToken().isBlank())
@@ -422,7 +425,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		}
 		locationShared = false;
 		lastLocation = null;
-		post(new String[]{"api", "player", player, "location"}, "{\"offline\":true}", (code, retryAfter, reply) -> { });
+		post(new String[]{"api", "player", player, "location"}, remove ? "{\"remove\":true}" : "{\"offline\":true}", (code, retryAfter, reply) -> { });
 	}
 
 	// ---------------------------------------------------------------- Bank

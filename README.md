@@ -12,7 +12,7 @@ Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a
    - **Stats, quests, diaries, worn items and inventory:** sent about 10 seconds after you log in, then at most every 10 minutes when something changed, and together with each bank sync.
    - **Collection log:** open your collection log in-game and click **Search** once. The game then loads every item you have, and the plugin sends them. After that, new items are picked up from the chat message *New item added to your collection log* (turn on that game setting).
    - **Live XP:** your XP drops are bundled and sent at most every 2 seconds. Your player page shows that you are skilling.
-   - **Location:** while you are logged in, your position is sent at most every 3 seconds when you move (and at least every 30 seconds). Logged-in players see everyone on a map on the site. When you log out, hop worlds or turn the setting off, you disappear from the map. Only your latest position is kept, not a history.
+   - **Location:** while you are logged in, your position is sent at most every 3 seconds when you move (and at least every 30 seconds). Logged-in players see everyone on a map on the site. When you log out or hop worlds, the map shows you dimmed at your last position. When you turn the setting (or the plugin) off, your position is removed from the site. Only your latest position is kept, not a history.
 
 The plugin skips uploads when nothing has changed.
 
@@ -39,7 +39,7 @@ Every request includes your display name (it is part of the request URL) and you
 - **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory (with their inventory position): item id, item name and quantity.
 - **Collection log:** the item ids of collection log items you have, read when you open the log in-game, and the item name from the *New item added to your collection log* chat message.
 - **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
-- **Location** (unless Share location is off): your tile position (x, y and plane, in instances the real world position) and your world number. The server only keeps your latest position, in memory, and only logged-in players of the site can see it.
+- **Location** (unless Share location is off): your tile position (x, y and plane, in instances the real world position) and your world number. The server only keeps your latest position (shown dimmed after you log out), and only logged-in players of the site can see it. Turning Share location off removes it.
 
 Nothing else is sent. That includes your account details, password, other chat messages and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
 
