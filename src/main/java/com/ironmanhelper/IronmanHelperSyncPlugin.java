@@ -268,6 +268,11 @@ public class IronmanHelperSyncPlugin extends Plugin
 		final int y;
 		final int plane;
 		final int world;
+		/** Huidige en maximale HP en Prayer, voor de legenda naast de kaart */
+		final int hp;
+		final int maxHp;
+		final int prayer;
+		final int maxPrayer;
 	}
 
 	@AllArgsConstructor
@@ -392,7 +397,12 @@ public class IronmanHelperSyncPlugin extends Plugin
 			return;
 		}
 		int world = client.getWorld();
-		String signature = wp.getX() + "," + wp.getY() + "," + wp.getPlane() + "," + world;
+		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		int maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
+		int prayer = client.getBoostedSkillLevel(Skill.PRAYER);
+		int maxPrayer = client.getRealSkillLevel(Skill.PRAYER);
+		// Ook versturen als alleen HP of Prayer veranderde (in een gevecht, of prayer die leegloopt)
+		String signature = wp.getX() + "," + wp.getY() + "," + wp.getPlane() + "," + world + "|" + hp + "/" + maxHp + "|" + prayer + "/" + maxPrayer;
 		long now = System.currentTimeMillis();
 		if (signature.equals(lastLocation) && now - lastLocationAt < LOCATION_HEARTBEAT_MS)
 		{
@@ -401,7 +411,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		lastLocation = signature;
 		lastLocationAt = now;
 		locationShared = true;
-		post(new String[]{"api", "player", playerName, "location"}, gson.toJson(new LocationBody(wp.getX(), wp.getY(), wp.getPlane(), world)), (code, retryAfter, reply) ->
+		post(new String[]{"api", "player", playerName, "location"}, gson.toJson(new LocationBody(wp.getX(), wp.getY(), wp.getPlane(), world, hp, maxHp, prayer, maxPrayer)), (code, retryAfter, reply) ->
 		{
 			if (code != 200 && code != 429)
 			{

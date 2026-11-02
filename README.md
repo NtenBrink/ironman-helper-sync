@@ -39,7 +39,7 @@ Every request includes your display name (it is part of the request URL) and you
 - **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory (with their inventory position): item id, item name and quantity.
 - **Collection log:** the item ids of collection log items you have, read when you open the log in-game, and the item name from the *New item added to your collection log* chat message.
 - **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
-- **Location** (unless Share location is off): your tile position (x, y and plane, in instances the real world position) and your world number. The server only keeps your latest position (shown dimmed after you log out), and only logged-in players of the site can see it. Turning Share location off removes it.
+- **Location** (unless Share location is off): your tile position (x, y and plane, in instances the real world position), your world number, and your current and maximum Hitpoints and Prayer (shown next to the map). The server only keeps your latest position (shown dimmed after you log out), and only logged-in players of the site can see it. Turning Share location off removes it.
 
 Nothing else is sent. That includes your account details, password, other chat messages and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
 
