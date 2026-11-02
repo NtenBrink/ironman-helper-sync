@@ -35,4 +35,15 @@ public interface IronmanHelperSyncConfig extends Config
 	{
 		return true;
 	}
+
+	@ConfigItem(
+		keyName = "shareLocation",
+		name = "Share location",
+		description = "Show where you are on the map on Ironman Helper (only your latest position, visible to logged-in players)",
+		position = 3
+	)
+	default boolean shareLocation()
+	{
+		return true;
+	}
 }

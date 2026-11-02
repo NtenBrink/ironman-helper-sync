@@ -1,6 +1,6 @@
 # Ironman Helper Sync
 
-Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a comparison site for a small group of OSRS ironman friends: your bank, your stats, quests and achievement diaries, what you are wearing and carrying, your collection log, and your XP drops live.
+Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a comparison site for a small group of OSRS ironman friends: your bank, your stats, quests and achievement diaries, what you are wearing and carrying, your collection log, your XP drops live, and where you are on a shared map.
 
 ## How it works
 
@@ -11,7 +11,8 @@ Keeps your account up to date on [Ironman Helper](https://ironman-helper.com), a
    - **Bank:** open your bank in-game. A few seconds after the last change, the plugin sends it. If anything changed since the last sync, it shows a chat message such as `Ironman Helper: bank synced (412 items).` The bank can only be read while it is open.
    - **Stats, quests, diaries, worn items and inventory:** sent about 10 seconds after you log in, then at most every 10 minutes when something changed, and together with each bank sync.
    - **Collection log:** open your collection log in-game and click **Search** once. The game then loads every item you have, and the plugin sends them. After that, new items are picked up from the chat message *New item added to your collection log* (turn on that game setting).
-   - **Live XP:** your XP drops are bundled and sent at most every 2 seconds. Your player page shows that you are skilling, with an XP per hour estimate.
+   - **Live XP:** your XP drops are bundled and sent at most every 2 seconds. Your player page shows that you are skilling.
+   - **Location:** while you are logged in, your position is sent at most every 3 seconds when you move (and at least every 30 seconds). Logged-in players see everyone on a map on the site. When you log out, hop worlds or turn the setting off, you disappear from the map. Only your latest position is kept, not a history.
 
 The plugin skips uploads when nothing has changed.
 
@@ -25,10 +26,11 @@ The plugin adds a small panel to the RuneLite sidebar with a **Sync now** button
 |---|---|---|
 | Sync token | *(empty)* | Token from the Bank tab; nothing is sent while this is empty |
 | Chat messages | on | Show a chat message when your bank was synced with changes |
+| Share location | on | Show where you are on the map on Ironman Helper |
 
 ## Data sent to a third-party server
 
-This plugin sends data to `ironman-helper.com`, which is not run by Jagex or RuneLite. The address is fixed and cannot be changed. The plugin only sends data when a sync token is set; with a token, all of the data below is synced. To stop syncing, clear the token or turn off the plugin.
+This plugin sends data to `ironman-helper.com`, which is not run by Jagex or RuneLite. The address is fixed and cannot be changed. The plugin only sends data when a sync token is set; with a token, all of the data below is synced. Your location can be turned off separately with **Share location**. To stop syncing, clear the token or turn off the plugin.
 
 Every request includes your display name (it is part of the request URL) and your sync token, as the `Authorization` header. The plugin sends:
 
@@ -37,8 +39,9 @@ Every request includes your display name (it is part of the request URL) and you
 - **Worn items and inventory:** the items you are wearing (with their slot) and the items in your inventory (with their inventory position): item id, item name and quantity.
 - **Collection log:** the item ids of collection log items you have, read when you open the log in-game, and the item name from the *New item added to your collection log* chat message.
 - **Live XP:** per skill, your new XP total and how much XP you gained since the previous update.
+- **Location** (unless Share location is off): your tile position (x, y and plane, in instances the real world position) and your world number. The server only keeps your latest position, in memory, and only logged-in players of the site can see it.
 
-Nothing else is sent. That includes your location, account details, password, other chat messages and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
+Nothing else is sent. That includes your account details, password, other chat messages and RuneLite settings. The plugin skips bank placeholders, and it does not sync on Leagues, Deadman, beta or other worlds with separate progress.
 
 The token only allows updating your own data on Ironman Helper. You can revoke it on the Bank tab at any time, after which the plugin can no longer sync.
 

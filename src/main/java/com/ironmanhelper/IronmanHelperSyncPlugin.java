@@ -30,6 +30,7 @@ import net.runelite.api.Quest;
 import net.runelite.api.QuestState;
 import net.runelite.api.Skill;
 import net.runelite.api.WorldType;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -65,7 +66,9 @@ import okhttp3.Response;
  * - het collection log: als je het in-game opent en zoekt (script 4100 per verkregen item, net als WikiSync), en
  *   nieuwe items uit de chatmelding "New item added to your collection log";
  * - live XP-drops, gebundeld en hooguit elke 2 seconden.
- * Met een sync-token wordt alles gesynct; het serveradres staat vast.
+ * - je positie voor de kaart ("Share location"): hooguit elke 3 s als je bewogen hebt, minstens elke 30 s, en
+ *   "offline" bij uitloggen. Alleen de laatste positie; in instances de echte wereldpositie.
+ * Met een sync-token wordt alles gesynct (de locatie is apart uit te zetten); het serveradres staat vast.
  */
 @Slf4j
 @PluginDescriptor(
@@ -91,6 +94,9 @@ public class IronmanHelperSyncPlugin extends Plugin
 	/** Script dat per verkregen collection log-item afgaat als het log zijn items laadt; argument 1 is het item-id */
 	private static final int CLOG_ITEM_SCRIPT = 4100;
 	private static final String CLOG_CHAT_PREFIX = "New item added to your collection log:";
+	/** Locatie: elke 5 ticks (3 s) kijken, minstens elke 30 s versturen */
+	private static final int LOCATION_TICKS = 5;
+	private static final long LOCATION_HEARTBEAT_MS = 30_000;
 	/** Werelden met een aparte bank en stats (leagues, deadman, beta enz.) niet syncen */
 	private static final Set<WorldType> SKIP_WORLDS = EnumSet.of(
 		WorldType.SEASONAL, WorldType.DEADMAN, WorldType.BETA_WORLD, WorldType.NOSAVE_MODE,
@@ -189,6 +195,12 @@ public class IronmanHelperSyncPlugin extends Plugin
 	private final Set<String> clogNames = ConcurrentHashMap.newKeySet();
 	private int clogLastTick = -1;
 
+	// --- Locatie ---
+	private int locationTicks;
+	private volatile String lastLocation;
+	private volatile long lastLocationAt;
+	private volatile boolean locationShared;
+
 	// --- Speler en wereld (bijgewerkt op de client-thread) ---
 	private volatile String playerName;
 	private volatile boolean skipWorld;
@@ -250,6 +262,15 @@ public class IronmanHelperSyncPlugin extends Plugin
 	}
 
 	@AllArgsConstructor
+	private static class LocationBody
+	{
+		final int x;
+		final int y;
+		final int plane;
+		final int world;
+	}
+
+	@AllArgsConstructor
 	private static class LiveBody
 	{
 		final List<LiveDrop> drops;
@@ -277,6 +298,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		// Plugin uit: van de kaart af
+		locationOffline();
 		clientToolbar.removeNavigation(navButton);
 		cancelPending();
 		if (profileTicker != null)
@@ -310,6 +333,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 		}
 		else if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
 		{
+			// Uitgelogd of van wereld gewisseld: van de kaart af (na het wisselen volgt de nieuwe positie)
+			locationOffline();
 			pendingDrops.clear();
 			playerName = null;
 		}
@@ -336,6 +361,68 @@ public class IronmanHelperSyncPlugin extends Plugin
 			xpBaselineNeeded = false;
 		}
 		flushCollectionLog();
+		shareLocation(local);
+	}
+
+	// ---------------------------------------------------------------- Locatie (kaart)
+
+	/**
+	 * Positie voor de kaart: elke 5 ticks (3 s) kijken, versturen als je bewogen hebt of van wereld bent gewisseld,
+	 * en minstens elke 30 s een teken van leven. In instances (raids, POH) de echte wereldpositie.
+	 */
+	private void shareLocation(Player local)
+	{
+		if (!config.shareLocation() || skipWorld || config.syncToken().isBlank())
+		{
+			// Net uitgezet: meteen van de kaart af
+			if (locationShared)
+			{
+				locationOffline();
+			}
+			return;
+		}
+		if (local == null || playerName == null || local.getLocalLocation() == null || ++locationTicks < LOCATION_TICKS)
+		{
+			return;
+		}
+		locationTicks = 0;
+		WorldPoint wp = WorldPoint.fromLocalInstance(client, local.getLocalLocation());
+		if (wp == null)
+		{
+			return;
+		}
+		int world = client.getWorld();
+		String signature = wp.getX() + "," + wp.getY() + "," + wp.getPlane() + "," + world;
+		long now = System.currentTimeMillis();
+		if (signature.equals(lastLocation) && now - lastLocationAt < LOCATION_HEARTBEAT_MS)
+		{
+			return;
+		}
+		lastLocation = signature;
+		lastLocationAt = now;
+		locationShared = true;
+		post(new String[]{"api", "player", playerName, "location"}, gson.toJson(new LocationBody(wp.getX(), wp.getY(), wp.getPlane(), world)), (code, retryAfter, reply) ->
+		{
+			if (code != 200 && code != 429)
+			{
+				// Volgende keer opnieuw proberen
+				lastLocation = null;
+			}
+		});
+	}
+
+	/** Van de kaart af (uitloggen, wereld wisselen of "Share location" uit). */
+	private void locationOffline()
+	{
+		String player = playerName;
+		if (!locationShared || player == null || config.syncToken().isBlank())
+		{
+			locationShared = false;
+			return;
+		}
+		locationShared = false;
+		lastLocation = null;
+		post(new String[]{"api", "player", player, "location"}, "{\"offline\":true}", (code, retryAfter, reply) -> { });
 	}
 
 	// ---------------------------------------------------------------- Bank
