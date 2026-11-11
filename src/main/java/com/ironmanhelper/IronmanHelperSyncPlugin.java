@@ -37,7 +37,9 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -80,6 +82,8 @@ public class IronmanHelperSyncPlugin extends Plugin
 {
 	/** Vast serveradres; niet in te stellen door de speler */
 	static final String SERVER_URL = "https://ironman-helper.com";
+	/** Taak-id (varp SLAYER_TARGET) van een boss-taak; welke boss staat dan in varbit SLAYER_TARGET_BOSSID. */
+	private static final int BOSS_TASK = 98;
 
 	private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 	/** Wachten na de laatste bankwijziging voordat we versturen */
@@ -354,6 +358,7 @@ public class IronmanHelperSyncPlugin extends Plugin
 		{
 			playerName = local.getName().replace(' ', ' ');
 		}
+		updateSlayerTask();
 		if (xpBaselineNeeded)
 		{
 			for (Skill skill : Skill.values())
@@ -375,6 +380,90 @@ public class IronmanHelperSyncPlugin extends Plugin
 	 * Positie voor de kaart: elke 5 ticks (3 s) kijken, versturen als je bewogen hebt of van wereld bent gewisseld,
 	 * en minstens elke 30 s een teken van leven. In instances (raids, POH) de echte wereldpositie.
 	 */
+	/** Laatst gelezen taak (aantal, taak-id, boss-id), zodat de naam alleen bij een wijziging opnieuw wordt opgezocht. */
+	private int slayerCount = -1;
+	private int slayerTaskId = -1;
+	private int slayerBossId = -1;
+	private String slayerPlayer;
+
+	/**
+	 * Huidige slayer-taak uitlezen, zoals de Slayer-plugin van RuneLite dat doet, en in het zijpaneel zetten.
+	 * Alleen lokaal: de taak wordt niet naar de server gestuurd, alleen in de link naar de DPS calculator gezet.
+	 */
+	private void updateSlayerTask()
+	{
+		int count = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
+		int taskId = client.getVarpValue(VarPlayerID.SLAYER_TARGET);
+		int bossId = client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID);
+		String player = playerName;
+		if (count == slayerCount && taskId == slayerTaskId && bossId == slayerBossId && java.util.Objects.equals(player, slayerPlayer))
+		{
+			return;
+		}
+		boolean sameTask = taskId == slayerTaskId && bossId == slayerBossId && java.util.Objects.equals(player, slayerPlayer);
+		slayerCount = count;
+		slayerTaskId = taskId;
+		slayerBossId = bossId;
+		slayerPlayer = player;
+		if (count <= 0 || player == null)
+		{
+			panel.setSlayerTask(null, null, 0);
+			return;
+		}
+		if (sameTask)
+		{
+			panel.setSlayerCount(count);
+			return;
+		}
+		panel.setSlayerTask(player, slayerTaskName(taskId, bossId), count);
+	}
+
+	/** Naam van de taak uit de cache-tabellen ("Blue dragons"; bij een boss-taak de boss, bv. "Vorkath"). */
+	private String slayerTaskName(int taskId, int bossId)
+	{
+		try
+		{
+			int row;
+			if (taskId == BOSS_TASK)
+			{
+				List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTaskSublist.ID, DBTableID.SlayerTaskSublist.COL_TASK_SUBTABLE_ID, 0, bossId);
+				if (rows.isEmpty())
+				{
+					return null;
+				}
+				row = (Integer) client.getDBTableField(rows.get(0), DBTableID.SlayerTaskSublist.COL_TASK, 0)[0];
+			}
+			else
+			{
+				List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0, taskId);
+				if (rows.isEmpty())
+				{
+					return null;
+				}
+				row = rows.get(0);
+			}
+			return (String) client.getDBTableField(row, DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0)[0];
+		}
+		catch (RuntimeException e)
+		{
+			log.debug("Slayer-taak niet op te zoeken", e);
+			return null;
+		}
+	}
+
+	/** Link naar de DPS calculator van deze speler voor de taak, met de slayer-taak aan (slayer helm telt mee). */
+	static String dpsCalculatorUrl(String player, String task)
+	{
+		return HttpUrl.parse(SERVER_URL).newBuilder()
+			.addPathSegment("speler")
+			.addPathSegment(player)
+			.addPathSegment("gear")
+			.addQueryParameter("slayer", task)
+			.addQueryParameter("task", "1")
+			.build()
+			.toString();
+	}
+
 	private void shareLocation(Player local)
 	{
 		if (!config.shareLocation() || skipWorld || config.syncToken().isBlank())

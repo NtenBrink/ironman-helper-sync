@@ -14,6 +14,7 @@ import javax.swing.SwingUtilities;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.LinkBrowser;
 
 /**
  * Zijpaneel: een knop "Sync now" (profiel meteen versturen, en de bank als die open is of net was) en per soort
@@ -27,6 +28,11 @@ class IronmanHelperSyncPanel extends PluginPanel
 	private final JLabel bankStatus = status();
 	private final JLabel profileStatus = status();
 	private final JLabel liveStatus = status();
+	private final JLabel slayerTask = status();
+	private final JButton dpsButton = new JButton("Open DPS calculator");
+	private final JPanel slayerRow = new JPanel(new BorderLayout(0, 6));
+	private String dpsUrl;
+	private String taskName;
 
 	IronmanHelperSyncPanel(Runnable onSync)
 	{
@@ -59,6 +65,31 @@ class IronmanHelperSyncPanel extends PluginPanel
 		rows.add(row("Stats, items & collection log", profileStatus));
 		rows.add(row("Live XP", liveStatus));
 		content.add(rows);
+
+		// Slayer-taak met een knop naar de DPS calculator (alleen zichtbaar als je een taak hebt)
+		slayerRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		slayerRow.setBorder(BorderFactory.createEmptyBorder(6, 8, 8, 8));
+		slayerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel slayerTitle = new JLabel("Slayer task");
+		slayerTitle.setForeground(ColorScheme.TEXT_COLOR);
+		slayerRow.add(slayerTitle, BorderLayout.NORTH);
+		slayerRow.add(slayerTask, BorderLayout.CENTER);
+		dpsButton.setFocusPainted(false);
+		dpsButton.setToolTipText("Opens the DPS calculator on ironman-helper.com for this task");
+		dpsButton.addActionListener(e ->
+		{
+			if (dpsUrl != null)
+			{
+				LinkBrowser.browse(dpsUrl);
+			}
+		});
+		slayerRow.add(dpsButton, BorderLayout.SOUTH);
+		slayerRow.setVisible(false);
+		JPanel slayerWrap = new JPanel(new BorderLayout());
+		slayerWrap.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
+		slayerWrap.setAlignmentX(Component.LEFT_ALIGNMENT);
+		slayerWrap.add(slayerRow);
+		content.add(slayerWrap);
 
 		add(content, BorderLayout.NORTH);
 	}
@@ -105,6 +136,34 @@ class IronmanHelperSyncPanel extends PluginPanel
 		{
 			syncButton.setEnabled(!busy);
 			syncButton.setText(busy ? "Syncing…" : "Sync now");
+		});
+	}
+
+	/** Slayer-taak tonen (mag vanaf elke thread); zonder taak verdwijnt het blok. */
+	void setSlayerTask(String player, String task, int count)
+	{
+		String url = player != null && task != null ? IronmanHelperSyncPlugin.dpsCalculatorUrl(player, task) : null;
+		SwingUtilities.invokeLater(() ->
+		{
+			dpsUrl = url;
+			taskName = task;
+			slayerRow.setVisible(count > 0);
+			slayerTask.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			slayerTask.setText(task != null ? count + "× " + task : count + " left (task name unknown)");
+			dpsButton.setEnabled(url != null);
+			revalidate();
+		});
+	}
+
+	/** Alleen het aantal bijwerken (na een kill). */
+	void setSlayerCount(int count)
+	{
+		SwingUtilities.invokeLater(() ->
+		{
+			if (taskName != null)
+			{
+				slayerTask.setText(count + "× " + taskName);
+			}
 		});
 	}
 }
